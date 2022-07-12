@@ -1,14 +1,17 @@
 from sly import Lexer, Parser
+from colorama import init, Fore, Style
 
 
-class BasicLexer(Lexer):
+init()
+
+
+class ModLexer(Lexer):
     tokens = {NAME, NUMBER, STRING}
     ignore = '\t '
-    literals = {'=', '+', '-', '/',
-                '*', '(', ')', ',', ';'}
-                
-    NAME = r'[a-zA-Z_][a-zA-Z0-9_]*'
-    STRING = r'\".*?\"'
+    literals = {'=', '+', '-', '/', '*', '(', ')'}
+
+    NAME = r'[a-zA-Zа-яА-Я_][a-zA-Zа-яА-Я0-9_]*'
+    STRING = r'\".*?\"|\'.*?\''
 
     @_(r'\d+')
     def NUMBER(self, t):
@@ -23,9 +26,14 @@ class BasicLexer(Lexer):
     def newline(self, t):
         self.lineno = t.value.count('\n')
 
+    def error(self, t):
+        print(Fore.RED, "Error 2: Undefined character found!", Style.RESET_ALL, sep='')
+        self.index += 1
 
-class BasicParser(Parser):
-    tokens = BasicLexer.tokens
+
+class ModParser(Parser):
+    tokens = ModLexer.tokens
+
     precedence = (
         ('left', '+', '-'),
         ('left', '*', '/'),
@@ -84,17 +92,18 @@ class BasicParser(Parser):
         return ('num', p.NUMBER)
 
 
-class BasicExecute:
-
+class ModExecute:
     def __init__(self, tree, env):
         self.env = env
         result = self.walkTree(tree)
         if result is not None and isinstance(result, int):
             print(result)
-        if isinstance(result, str) and result[0] == '"':
+        if isinstance(result, str) and result[0] == '"' \
+                or isinstance(result, str) and result[0] == "'":
             print(result)
 
     def walkTree(self, node):
+        ops = ["help", "credits"]
         if isinstance(node, int) or isinstance(node, str):
             return node
 
@@ -108,7 +117,6 @@ class BasicExecute:
                 self.walkTree(node[1])
                 self.walkTree(node[2])
 
-
         if node[0] == 'str':
             return node[1]
 
@@ -120,37 +128,51 @@ class BasicExecute:
         elif node[0] == 'sub':
             return self.walkTree(node[1]) - self.walkTree(node[2])
         elif node[0] == 'mul':
-            return self.walkTree(node[1]) * self.walkTree(node[2])
+            if self.walkTree([node[1]]) > 0:
+                if self.walkTree(node[2]) > 0:
+                    return self.walkTree(node[1]) * self.walkTree(node[2])
+            elif self.walkTree(node[1]) < 0:
+                return - self.walkTree(node[1]) * self.walkTree(node[2])
         elif node[0] == 'div':
-            return self.walkTree(node[1]) / self.walkTree(node[2])
+            try:
+                return self.walkTree(node[1]) / self.walkTree(node[2])
+            except ZeroDivisionError:
+                print(Fore.RED, 'Error 3: Zero division found!', Style.RESET_ALL, sep='')
 
         if node[0] == 'var_assign':
             self.env[node[1]] = self.walkTree(node[2])
             return node[1]
 
-        if node[1] == 'help':
-            print('Available commands: print(), input(), help, credits')
-
-        if node[1] == 'credits':
-            print('Code & architecture: <names>')
-
         if node[0] == 'var':
-            if node[1] != 'help' and node[1] != 'credits':
+            if node[1] not in ops:
                 try:
                     return self.env[node[1]]
                 except LookupError:
-                    print("Error 1: Undefined symbol '" + node[1] + "' found.")
+                    print(Fore.RED, "Error 1: Undefined name '" + node[1] + "' found!", Style.RESET_ALL, sep='')
+            else:
+                if node[1] == 'help':
+                    print('Available commands: help, credits, <any basic math operations>')
+                elif node[1] == 'credits':
+                    print('Code, architecture & tests: N.Trushko, A.Paruhin, A.Ivanov, K.Savin (SPbSUT)')
 
 
 if __name__ == '__main__':
-    lexer = BasicLexer()
-    parser = BasicParser()
-    print('Ether Language v0.1.\nType "help" or "credits" for more information.')
+    lexer = ModLexer()
+    parser = ModParser()
+    print(Fore.BLUE + """
+    ______________  ____________           ____   ___ 
+   / ____/_  __/ / / / ____/ __ \   _   __/ __ \ |__ \\
+  / __/   / / / /_/ / __/ / /_/ /  | | / / / / / __/ /
+ / /___  / / / __  / /___/ _, _/   | |/ / /_/ / / __/ 
+/_____/ /_/ /_/ /_/_____/_/ |_|    |___/\____(_)____/ 
+-----------------------------------------------------\n""", Style.RESET_ALL,
+"""Ether Language v0.2.\nType "help" or "credits" for more information.""", sep='')
     env = {}
 
     while True:
         try:
-            text = input('Ether> ')
+            print("Ether>", end='')
+            text = input()
         except EOFError:
             break
         if text:
@@ -158,4 +180,4 @@ if __name__ == '__main__':
                 break
             elif text:
                 tree = parser.parse(lexer.tokenize(text))
-            BasicExecute(tree, env)
+            ModExecute(tree, env)
